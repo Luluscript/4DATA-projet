@@ -2,11 +2,13 @@ from dagster import asset
 import os
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
+from datetime import datetime
 
 @asset
 def fichiers_xml_action_b(context):
     url_base = "http://tipi.bison-fute.gouv.fr/bison-fute-restreint/publications-restreintes/grt/ACTION-B/"
-    login = "mpublication-grt"
+    login = "publication-grt"
     password = "CheiPe7T"
 
     response = requests.get(url_base, auth=(login, password))
@@ -20,6 +22,8 @@ def fichiers_xml_action_b(context):
     dossier_data = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'xml_action_b'))
     os.makedirs(dossier_data, exist_ok=True)
 
+    downloaded_files = []
+
     for lien in liens_xml:
         url_fichier = url_base + lien
         nom_fichier = os.path.join(dossier_data, lien)
@@ -31,3 +35,6 @@ def fichiers_xml_action_b(context):
             context.log.info(f"Fichier téléchargé : {nom_fichier}")
         else:
             context.log.warning(f"Échec : {url_fichier} - Code {fichier.status_code}")
+
+    return downloaded_files
+

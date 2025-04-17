@@ -2,6 +2,7 @@ wcwidth
 dagster
 dagster-webserver
 dagster-docker
+dagster-graphql
 pandas
 python-dotenv
 dagster-postgres
