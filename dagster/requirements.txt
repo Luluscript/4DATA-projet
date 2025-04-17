@@ -1,0 +1,9 @@
+wcwidth
+dagster
+dagster-webserver
+dagster-docker
+pandas
+python-dotenv
+dagster-postgres
+beautifulsoup4
+requests

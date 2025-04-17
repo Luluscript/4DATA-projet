@@ -1,0 +1,21 @@
+FROM python:3.10-slim
+
+# Checkout and install dagster libraries needed to run the gRPC server
+# exposing your repository to dagster-webserver and dagster-daemon, and to load the DagsterInstance
+
+# Mise à jour de pip et installation de setuptools et wheel (optionnel mais parfois utile)
+RUN pip install --upgrade pip setuptools wheel
+
+WORKDIR /opt/dagster/app
+
+COPY requirements.txt /opt/dagster/app/
+
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./dags/ /opt/dagster/app/
+
+# Run dagster gRPC server on port 3000
+EXPOSE 4000
+
+CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-f", "definitions.py"]
