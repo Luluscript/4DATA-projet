@@ -1,4 +1,4 @@
-from dagster import asset
+from dagster import asset, AssetExecutionContext
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -284,7 +284,7 @@ def nettoyer_donnees_xml(context, parse_fichiers_xml):
 
 # Pour l'export CSV
 @asset(deps=["nettoyer_donnees_xml"])
-def xml_data_csv(context, nettoyer_donnees_xml) -> None:
+def xml_data_csv(context, nettoyer_donnees_xml) -> str:
     """Exporte les données nettoyées des fichiers XML en format CSV."""
     df = nettoyer_donnees_xml
     
@@ -301,3 +301,44 @@ def xml_data_csv(context, nettoyer_donnees_xml) -> None:
     context.log.info(f"Données exportées en CSV: {csv_path}")
     
     return csv_path
+
+@asset(
+    deps=["xml_data_csv"],
+    required_resource_keys={"mongodb"}
+)
+def xml_data_mongodb(context: AssetExecutionContext, xml_data_csv) -> None:
+    """Importe les données du CSV dans MongoDB."""
+    # Accéder à la ressource mongodb via le context
+    mongodb = context.resources.mongodb
+    # Récupérer le chemin du CSV généré par l'asset précédent
+    csv_path = xml_data_csv
+    
+    # Vérifier que le fichier existe
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"Le fichier CSV n'existe pas: {csv_path}")
+    
+    # Charger les données du CSV
+    context.log.info(f"Chargement des données depuis: {csv_path}")
+    df = pd.read_csv(csv_path)
+    
+    # Ajouter une date d'importation si nécessaire
+    df['import_date'] = datetime.now().strftime('%Y-%m-%d')
+    
+    # Convertir en dictionnaires pour MongoDB
+    records = df.to_dict('records')
+    
+    # Obtenir la collection MongoDB
+    db = mongodb.get_database()
+    collection = db['supmap']
+    
+    # Option 1: Remplacer toute la collection
+    collection.delete_many({})
+    if records:
+        result = collection.insert_many(records)
+        context.log.info(f"Données insérées dans MongoDB: {len(result.inserted_ids)} documents")
+    else:
+        context.log.warning("Aucune donnée à insérer dans MongoDB")
+    
+    # Si vous souhaitez faire des opérations par lot (similaire au partitionnement)
+    # Vous pourriez regrouper par date ou autre critère
+    context.log.info("Import MongoDB terminé avec succès")

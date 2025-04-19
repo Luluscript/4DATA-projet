@@ -9,3 +9,4 @@ dagster-postgres
 beautifulsoup4
 requests
 lxml
+pymongo
