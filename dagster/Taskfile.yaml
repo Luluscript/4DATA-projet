@@ -1,0 +1,21 @@
+---
+version: '3'
+
+tasks:
+  reset:
+    desc: "Démarre les services en arrière-plan"
+    cmds:
+      - docker-compose down -v
+      - docker-compose up -d
+
+  reset-no-cache:
+    desc: "Démarre les services en arrière-plan avec un rebuild des images"
+    cmds:
+      - docker-compose down -v
+      - docker-compose up --build --force-recreate --no-deps -d
+
+  clean-volumes:
+    desc: "Clean up des volumes docker"
+    cmds:
+      - docker volume prune -f
+      - docker volume rm dagster_mongodb-data
