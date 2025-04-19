@@ -1,4 +1,37 @@
 services:
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: supmap
+      MONGO_INITDB_ROOT_PASSWORD: supmap
+      MONGO_INITDB_DATABASE: supmap
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ./mongodb/scripts/init-db.js:/docker-entrypoint-initdb.d/init-db.js:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: supmap
+      ME_CONFIG_MONGODB_ADMINPASSWORD: supmap
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb
+    restart: unless-stopped
   # This service runs the postgres DB used by dagster for run storage, schedule storage,
   # and event log storage. Depending on the hardware you run this Compose on, you may be able
   # to reduce the interval and timeout in the healthcheck to speed up your `docker-compose up` times.
@@ -103,3 +136,6 @@ networks:
   docker_example_network:
     driver: bridge
     name: docker_example_network
+
+volumes:
+  mongodb-data:

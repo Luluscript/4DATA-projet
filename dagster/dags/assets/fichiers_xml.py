@@ -281,3 +281,23 @@ def nettoyer_donnees_xml(context, parse_fichiers_xml):
     context.log.info(f"Nettoyage terminé: {len(df)} lignes après traitement.")
     
     return df
+
+# Pour l'export CSV
+@asset(deps=["nettoyer_donnees_xml"])
+def xml_data_csv(context, nettoyer_donnees_xml) -> None:
+    """Exporte les données nettoyées des fichiers XML en format CSV."""
+    df = nettoyer_donnees_xml
+    
+    # Créer le dossier de sortie s'il n'existe pas
+    output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'processed'))
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Chemin du fichier CSV
+    csv_path = os.path.join(output_dir, f"action_b_data_{pd.Timestamp.now().strftime('%Y%m%d')}.csv")
+    
+    # Exporter en CSV
+    df.to_csv(csv_path, index=False, encoding='utf-8')
+    
+    context.log.info(f"Données exportées en CSV: {csv_path}")
+    
+    return csv_path
