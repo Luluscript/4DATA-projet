@@ -33,7 +33,7 @@ defs = Definitions(
     jobs=[mon_job],
     resources={
         "mongodb": mongodb_resource.configured({
-            "connection_string": "mongodb://localhost:27017/",
+            "connection_string": "mongodb://mongodb:27017/",
             "database_name": "supmap"
         })
     }

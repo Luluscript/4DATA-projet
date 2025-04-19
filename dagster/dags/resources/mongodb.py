@@ -19,8 +19,12 @@ class MongoDBResource:
 
 @resource(
     config_schema={
-        "connection_string": Field(StringSource, description="MongoDB connection string"),
-        "database_name": Field(StringSource, description="MongoDB database name"),
+        "connection_string": Field(StringSource, 
+            description="MongoDB connection string",
+            default_value="mongodb://mongodb:27017/"),  # Utilisez le nom du service
+        "database_name": Field(StringSource, 
+            description="MongoDB database name",
+            default_value="supmap"),
     }
 )
 def mongodb_resource(context):

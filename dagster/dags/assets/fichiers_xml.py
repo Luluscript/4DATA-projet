@@ -253,98 +253,125 @@ def nettoyer_donnees_xml(context, parse_fichiers_xml):
     """
     Asset pour nettoyer et transformer les données extraites des fichiers XML.
     """
-    df = parse_fichiers_xml.copy()
+    def standardiser_type_evenement(event_type):
+        """
+        Standardise les types d'événements en mappant différentes notations vers des catégories standard.
+        """
+        mapping = {
+            # Types principaux
+            'Accident': 'Accident',
+            'AbnormalTraffic': 'AbnormalTraffic',
+            'MaintenanceWorks': 'MaintenanceWorks',
+            'RoadOrCarriagewayOrLaneManagement': 'RoadManagement',
+            
+            # Types avec préfixes ns2:
+            'ns2:Accident': 'Accident',
+            'ns2:AbnormalTraffic': 'AbnormalTraffic', 
+            'ns2:MaintenanceWorks': 'MaintenanceWorks',
+            'ns2:RoadOrCarriagewayOrLaneManagement': 'RoadManagement',
+            
+            # Types divers
+            'GeneralObstruction': 'Obstruction',
+            'VehicleObstruction': 'Obstruction',
+            'AnimalPresenceObstruction': 'Obstruction',
+            
+            # Autres valeurs possibles selon vos données
+        }
+        return mapping.get(event_type, 'Other')
     
-    if df.empty:
-        context.log.warning("DataFrame vide, aucun nettoyage effectué.")
+    try:
+        # Récupération du DataFrame
+        df = parse_fichiers_xml
+        
+        # 1. Vérifier que le DataFrame n'est pas vide
+        if df.empty:
+            context.log.warning("Le DataFrame d'entrée est vide.")
+            return pd.DataFrame()  # Retourne un DataFrame vide
+            
+        # 2. Gérer les colonnes de coordonnées de façon plus intelligente
+        coord_columns = ['LatitudeDepart', 'LongitudeDepart', 'LatitudeArrivee', 'LongitudeArrivee']
+        
+        # Vérifier chaque colonne de coordonnées individuellement
+        empty_coord_columns = []
+        for col in coord_columns:
+            if col in df.columns:
+                if df[col].isna().all():  # Si la colonne existe mais est entièrement vide
+                    empty_coord_columns.append(col)
+                    context.log.info(f"Colonne {col} est entièrement vide.")
+                else:
+                    context.log.info(f"Colonne {col} contient des données valides : {df[col].notna().sum()} valeurs.")
+            else:
+                context.log.warning(f"Colonne {col} n'existe pas dans le DataFrame.")
+        
+        # Supprimer uniquement les colonnes vides si nécessaire
+        if empty_coord_columns:
+            if len(empty_coord_columns) == len(coord_columns):
+                context.log.warning("Toutes les colonnes de coordonnées sont vides.")
+            else:
+                context.log.info(f"Suppression des colonnes de coordonnées vides: {empty_coord_columns}")
+                df = df.drop(columns=empty_coord_columns)
+        
+        # 3. Normaliser les types d'événements
+        if 'EventType' in df.columns:
+            # Afficher les types d'événements uniques
+            unique_types = df['EventType'].unique()
+            context.log.info(f"Types d'événements uniques dans les données: {unique_types}")
+            
+            # Créer une colonne standardisée pour le type d'événement
+            df['TypeStandardise'] = df['EventType'].apply(standardiser_type_evenement)
+            context.log.info("Colonne TypeStandardise ajoutée.")
+            
+            # Identifier les types non standardisés
+            non_std_types = set([t for t in df['EventType'].unique() if standardiser_type_evenement(t) == 'Other'])
+            if non_std_types:
+                context.log.warning(f"Types non standardisés trouvés: {non_std_types}")
+        
+        # 4. Normaliser les dates
+        if 'DateVersion' in df.columns:
+            try:
+                df['DateVersion'] = pd.to_datetime(df['DateVersion'], errors='coerce')
+                context.log.info("Colonne DateVersion convertie en datetime.")
+            except Exception as e:
+                context.log.error(f"Erreur lors de la conversion de DateVersion: {str(e)}")
+        
+        # Convertir la colonne DateDebut en datetime
+        if 'DateDebut' in df.columns:
+            try:
+                df['DateDebut'] = pd.to_datetime(df['DateDebut'], errors='coerce')
+                context.log.info("Colonne DateDebut convertie en datetime.")
+                
+                # Ajouter des colonnes dérivées si DateDebut est au format datetime
+                if pd.api.types.is_datetime64_dtype(df['DateDebut']):
+                    df['Annee'] = df['DateDebut'].dt.year
+                    df['Mois'] = df['DateDebut'].dt.month
+                    df['Jour'] = df['DateDebut'].dt.day
+                    context.log.info("Colonnes Annee, Mois, Jour ajoutées.")
+                else:
+                    context.log.warning("La colonne DateDebut n'est pas au format datetime. Colonnes dérivées non créées.")
+            except Exception as e:
+                context.log.error(f"Erreur lors de la conversion de DateDebut: {str(e)}")
+        
+        # 5. Nettoyer les valeurs extrêmes dans les coordonnées géographiques
+        coord_cols = [col for col in coord_columns if col in df.columns and not df[col].isna().all()]
+        for col in coord_cols:
+            if col.startswith('Latitude'):
+                # Filtrer les latitudes valides (-90 à 90)
+                invalid_mask = (df[col] < -90) | (df[col] > 90)
+                if invalid_mask.any():
+                    df.loc[invalid_mask, col] = np.nan
+                    context.log.warning(f"Valeurs invalides détectées dans {col}. {invalid_mask.sum()} valeurs remplacées par NaN.")
+            elif col.startswith('Longitude'):
+                # Filtrer les longitudes valides (-180 à 180)
+                invalid_mask = (df[col] < -180) | (df[col] > 180)
+                if invalid_mask.any():
+                    df.loc[invalid_mask, col] = np.nan
+                    context.log.warning(f"Valeurs invalides détectées dans {col}. {invalid_mask.sum()} valeurs remplacées par NaN.")
+        
         return df
     
-    # Journalisation avant nettoyage
-    context.log.info(f"Nettoyage du DataFrame: {len(df)} lignes avant traitement.")
-    context.log.info(f"Colonnes présentes dans le DataFrame: {df.columns.tolist()}")
-    
-    # Vérifier les valeurs manquantes dans les coordonnées
-    coord_columns = ['LatitudeDepart', 'LongitudeDepart', 'LatitudeArrivee', 'LongitudeArrivee']
-    for col in coord_columns:
-        if col in df.columns:
-            na_count = df[col].isna().sum()
-            context.log.info(f"Nombre de valeurs NaN dans {col}: {na_count} sur {len(df)}")
-    
-    # 1. Supprimer les doublons
-    df_sans_doublons = df.drop_duplicates(subset=['SituationID'], keep='first')
-    context.log.info(f"{len(df) - len(df_sans_doublons)} doublons supprimés.")
-    df = df_sans_doublons
-    
-    # 2. Gérer les valeurs manquantes de façon plus souple
-    # Au lieu de supprimer les lignes sans coordonnées, on peut:
-    # a) Conserver au moins une paire de coordonnées (départ OU arrivée)
-    has_any_coords = df['LatitudeDepart'].notna() | df['LatitudeArrivee'].notna()
-    df_avec_coords = df[has_any_coords]
-    context.log.info(f"Après filtrage souple sur les coordonnées: {len(df_avec_coords)} lignes.")
-    
-    # Si après ce filtre souple on a encore 0 ligne, on reprend le DataFrame original
-    if len(df_avec_coords) == 0:
-        context.log.warning("Aucune ligne avec coordonnées valides. Conservation du DataFrame original.")
-        df_avec_coords = df
-    
-    df = df_avec_coords
-    
-    # 3. Standardiser certaines valeurs
-    if 'RecordType' in df.columns:
-        # Standardiser les types d'événements
-        type_mapping = {
-            'AbnormalTraffic': 'Trafic Anormal',
-            'Accident': 'Accident',
-            'RoadOrCarriagewayOrLaneManagement': 'Gestion de Voie',
-            'RoadWorks': 'Travaux',
-            'MaintenanceWorks': 'Travaux',
-            'PlanningWorks': 'Travaux',
-        }
-        
-        df['TypeStandardise'] = df['RecordType'].apply(lambda x: type_mapping.get(x, x) if pd.notna(x) else x)
-        context.log.info("Colonne TypeStandardise ajoutée.")
-    
-    # 4. Convertir les dates en format datetime
-    date_columns = ['DateVersion', 'DateDebut']
-    for col in date_columns:
-        if col in df.columns:
-            try:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-                context.log.info(f"Colonne {col} convertie en datetime.")
-            except Exception as e:
-                context.log.warning(f"Erreur lors de la conversion de la colonne {col}: {e}")
-    
-    # 5. Ajouter colonnes calculées
-    if 'DateDebut' in df.columns:
-        try:
-            df['Jour_Semaine'] = df['DateDebut'].dt.day_name()
-            df['Heure_Debut'] = df['DateDebut'].dt.hour
-            context.log.info("Colonnes Jour_Semaine et Heure_Debut ajoutées.")
-        except Exception as e:
-            context.log.warning(f"Erreur lors de la création des colonnes dérivées: {e}")
-    
-    # 6. Normaliser valeurs textuelles
-    text_columns = ['Commentaire', 'NumeroRoute']
-    for col in text_columns:
-        if col in df.columns:
-            df[col] = df[col].str.strip() if df[col].dtype == 'object' else df[col]
-    
-    # 7. Valeur booléenne plus explicite
-    if 'EstTermine' in df.columns:
-        df['Statut'] = df['EstTermine'].apply(lambda x: 'Terminé' if x else 'En cours')
-        context.log.info("Colonne Statut ajoutée.")
-    
-    # 8. Tri du DataFrame
-    if 'DateDebut' in df.columns and not df['DateDebut'].isna().all():
-        df = df.sort_values(by='DateDebut', ascending=False)
-        context.log.info("DataFrame trié par DateDebut.")
-    else:
-        context.log.warning("Impossible de trier par DateDebut (valeurs manquantes ou colonne absente).")
-    
-    context.log.info(f"Nettoyage terminé: {len(df)} lignes après traitement.")
-    
-    return df
-
+    except Exception as e:
+        context.log.error(f"Une erreur s'est produite lors du nettoyage des données: {str(e)}")
+        raise
 
 # Pour l'export CSV
 @asset(deps=["nettoyer_donnees_xml"])
@@ -438,9 +465,10 @@ def xml_data_mongodb(context: AssetExecutionContext, xml_data_csv) -> None:
         records = df.to_dict('records')
         context.log.info(f"Préparation de {len(records)} documents pour l'insertion")
         
-        # Obtenir la collection MongoDB
-        db = mongodb.get_database('supmap')
-        collection = db['users']
+        # Obtenir la base de données et la collection MongoDB
+        # La méthode get_database() ne prend pas d'arguments
+        db = mongodb.get_database()
+        collection = db['users']  # Accéder à la collection 'users'
         
         # Supprimer les données existantes
         context.log.info("Suppression des anciennes données de la collection...")
