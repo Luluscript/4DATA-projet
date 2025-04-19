@@ -1,10 +1,10 @@
 from dagster import Definitions
 
 # APRÈS si renommé en fichiers_xml.py
-from assets.fichiers_xml import fichiers_xml_action_b 
+from assets.fichiers_xml import fichiers_xml_action_b, parse_fichiers_xml, nettoyer_donnees_xml
 # parse_fichiers_xml
 
-# from jobs import MyJob
+from jobs import mon_job
 
 # from schedules import my_job_schedule 
 
@@ -12,13 +12,14 @@ from assets.fichiers_xml import fichiers_xml_action_b
 # Define all assets
 asset_definitions = [
     fichiers_xml_action_b,
-    # parse_fichiers_xml,
+    parse_fichiers_xml,
+    nettoyer_donnees_xml,
 ]
 
-# # Define all jobs
-# job_definitions = [
-#     MyJob,
-# ]
+# Define all jobs
+job_definitions = [
+    mon_job,
+]
 
 # # Define all schedules
 # schedule_definitions = [

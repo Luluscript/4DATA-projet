@@ -33,14 +33,15 @@ def fichiers_xml_action_b(context):
         if fichier.status_code == 200:
             with open(nom_fichier, 'wb') as f:
                 f.write(fichier.content)
+            downloaded_files.append(nom_fichier)  # Ajouter le chemin du fichier à la liste    
             context.log.info(f"Fichier téléchargé : {nom_fichier}")
         else:
             context.log.warning(f"Échec : {url_fichier} - Code {fichier.status_code}")
 
     return downloaded_files
 
-@asset
-def parse_fichiers_xml(context, downloaded_files):
+@asset(deps=["fichiers_xml_action_b"])
+def parse_fichiers_xml(context, fichiers_xml_action_b):
     # Définir la structure des données
     data = {
         'ID': None,
@@ -60,7 +61,7 @@ def parse_fichiers_xml(context, downloaded_files):
 
     all_data = []  # Liste pour stocker tous les DataFrames
 
-    for fichier_xml in downloaded_files:
+    for fichier_xml in fichiers_xml_action_b:
         try:
             # Charger le fichier XML
             tree = etree.parse(fichier_xml)
@@ -202,4 +203,81 @@ def parse_fichiers_xml(context, downloaded_files):
     else:
         df = pd.DataFrame()
 
+    return df
+
+@asset(deps=["parse_fichiers_xml"])
+def nettoyer_donnees_xml(context, parse_fichiers_xml):
+    """
+    Asset pour nettoyer et transformer les données extraites des fichiers XML.
+    """
+    df = parse_fichiers_xml.copy()
+    
+    if df.empty:
+        context.log.warning("DataFrame vide, aucun nettoyage effectué.")
+        return df
+    
+    # Journalisation avant nettoyage
+    context.log.info(f"Nettoyage du DataFrame: {len(df)} lignes avant traitement.")
+    
+    # 1. Supprimer les doublons
+    df_sans_doublons = df.drop_duplicates(subset=['ID'], keep='first')
+    context.log.info(f"{len(df) - len(df_sans_doublons)} doublons supprimés.")
+    df = df_sans_doublons
+    
+    # 2. Gérer les valeurs manquantes
+    # Par exemple, remplir des valeurs manquantes spécifiques ou supprimer des lignes
+    # Pour les coordonnées géographiques, nous pouvons exiger qu'elles soient présentes
+    df = df.dropna(subset=['Latitude', 'Longitude'])
+    context.log.info(f"Après suppression des lignes sans coordonnées: {len(df)} lignes.")
+    
+    # 3. Standardiser certaines valeurs
+    if 'Type' in df.columns and not df['Type'].empty:
+        # Standardiser les types d'événements (exemple)
+        type_mapping = {
+            'Accident': 'Accident',
+            'Roadworks': 'Travaux',
+            'MaintenanceWorks': 'Travaux',
+            'PlanningWorks': 'Travaux',
+            # Ajoutez d'autres mappings selon vos besoins
+        }
+        
+        df['Type'] = df['Type'].apply(lambda x: type_mapping.get(x, x) if pd.notna(x) else x)
+    
+    # 4. Convertir les dates en format datetime pour faciliter les manipulations
+    for col in ['Debut', 'Fin']:
+        if col in df.columns and not df[col].empty:
+            try:
+                df[col] = pd.to_datetime(df[col], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+            except Exception as e:
+                context.log.warning(f"Erreur lors de la conversion de la colonne {col}: {e}")
+    
+    # 5. Ajouter de nouvelles colonnes calculées qui pourraient être utiles
+    # Par exemple, extraction du jour de la semaine, de l'heure, etc.
+    if 'Debut' in df.columns and not df['Debut'].empty:
+        try:
+            df['Jour_Semaine'] = df['Debut'].dt.day_name()
+            df['Heure_Debut'] = df['Debut'].dt.hour
+        except Exception as e:
+            context.log.warning(f"Erreur lors de la création des colonnes dérivées: {e}")
+    
+    # 6. Normaliser certaines valeurs textuelles
+    text_columns = ['Lieu', 'Voie', 'Direction']
+    for col in text_columns:
+        if col in df.columns and not df[col].empty:
+            # Convertir en majuscules et supprimer les espaces superflus
+            df[col] = df[col].str.strip().str.upper() if df[col].dtype == 'object' else df[col]
+    
+    # 7. Filtrer les événements périmés si nécessaire
+    if 'Fin' in df.columns and not df['Fin'].empty:
+        now = pd.Timestamp.now()
+        df_actifs = df[df['Fin'] >= now]
+        context.log.info(f"{len(df) - len(df_actifs)} événements périmés supprimés.")
+        df = df_actifs
+    
+    # 8. Trier le DataFrame
+    if 'Debut' in df.columns and not df['Debut'].empty:
+        df = df.sort_values(by='Debut', ascending=False)
+    
+    context.log.info(f"Nettoyage terminé: {len(df)} lignes après traitement.")
+    
     return df
