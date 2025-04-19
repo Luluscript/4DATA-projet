@@ -263,17 +263,30 @@ def nettoyer_donnees_xml(context, parse_fichiers_xml):
     context.log.info(f"Nettoyage du DataFrame: {len(df)} lignes avant traitement.")
     context.log.info(f"Colonnes présentes dans le DataFrame: {df.columns.tolist()}")
     
+    # Vérifier les valeurs manquantes dans les coordonnées
+    coord_columns = ['LatitudeDepart', 'LongitudeDepart', 'LatitudeArrivee', 'LongitudeArrivee']
+    for col in coord_columns:
+        if col in df.columns:
+            na_count = df[col].isna().sum()
+            context.log.info(f"Nombre de valeurs NaN dans {col}: {na_count} sur {len(df)}")
+    
     # 1. Supprimer les doublons
-    # Utiliser SituationID au lieu de ID
     df_sans_doublons = df.drop_duplicates(subset=['SituationID'], keep='first')
     context.log.info(f"{len(df) - len(df_sans_doublons)} doublons supprimés.")
     df = df_sans_doublons
     
-    # 2. Gérer les valeurs manquantes
-    # Utilisez les bons noms de colonnes pour les coordonnées
-    # Dans notre asset de parsing, nous avons 'LatitudeDepart', 'LongitudeDepart' etc.
-    df_avec_coords = df.dropna(subset=['LatitudeDepart', 'LongitudeDepart'], how='all')
-    context.log.info(f"Après suppression des lignes sans coordonnées: {len(df_avec_coords)} lignes.")
+    # 2. Gérer les valeurs manquantes de façon plus souple
+    # Au lieu de supprimer les lignes sans coordonnées, on peut:
+    # a) Conserver au moins une paire de coordonnées (départ OU arrivée)
+    has_any_coords = df['LatitudeDepart'].notna() | df['LatitudeArrivee'].notna()
+    df_avec_coords = df[has_any_coords]
+    context.log.info(f"Après filtrage souple sur les coordonnées: {len(df_avec_coords)} lignes.")
+    
+    # Si après ce filtre souple on a encore 0 ligne, on reprend le DataFrame original
+    if len(df_avec_coords) == 0:
+        context.log.warning("Aucune ligne avec coordonnées valides. Conservation du DataFrame original.")
+        df_avec_coords = df
+    
     df = df_avec_coords
     
     # 3. Standardiser certaines valeurs
@@ -286,13 +299,12 @@ def nettoyer_donnees_xml(context, parse_fichiers_xml):
             'RoadWorks': 'Travaux',
             'MaintenanceWorks': 'Travaux',
             'PlanningWorks': 'Travaux',
-            # Ajoutez d'autres mappings selon vos besoins
         }
         
         df['TypeStandardise'] = df['RecordType'].apply(lambda x: type_mapping.get(x, x) if pd.notna(x) else x)
+        context.log.info("Colonne TypeStandardise ajoutée.")
     
-    # 4. Convertir les dates en format datetime pour faciliter les manipulations
-    # Utiliser les noms de colonnes corrects pour les dates
+    # 4. Convertir les dates en format datetime
     date_columns = ['DateVersion', 'DateDebut']
     for col in date_columns:
         if col in df.columns:
@@ -302,7 +314,7 @@ def nettoyer_donnees_xml(context, parse_fichiers_xml):
             except Exception as e:
                 context.log.warning(f"Erreur lors de la conversion de la colonne {col}: {e}")
     
-    # 5. Ajouter de nouvelles colonnes calculées qui pourraient être utiles
+    # 5. Ajouter colonnes calculées
     if 'DateDebut' in df.columns:
         try:
             df['Jour_Semaine'] = df['DateDebut'].dt.day_name()
@@ -311,25 +323,28 @@ def nettoyer_donnees_xml(context, parse_fichiers_xml):
         except Exception as e:
             context.log.warning(f"Erreur lors de la création des colonnes dérivées: {e}")
     
-    # 6. Normaliser certaines valeurs textuelles
+    # 6. Normaliser valeurs textuelles
     text_columns = ['Commentaire', 'NumeroRoute']
     for col in text_columns:
         if col in df.columns:
-            # Convertir en majuscules et supprimer les espaces superflus
             df[col] = df[col].str.strip() if df[col].dtype == 'object' else df[col]
     
-    # 7. Convertir la colonne booléenne en valeur plus explicite
+    # 7. Valeur booléenne plus explicite
     if 'EstTermine' in df.columns:
         df['Statut'] = df['EstTermine'].apply(lambda x: 'Terminé' if x else 'En cours')
+        context.log.info("Colonne Statut ajoutée.")
     
-    # 8. Trier le DataFrame
-    if 'DateDebut' in df.columns:
+    # 8. Tri du DataFrame
+    if 'DateDebut' in df.columns and not df['DateDebut'].isna().all():
         df = df.sort_values(by='DateDebut', ascending=False)
         context.log.info("DataFrame trié par DateDebut.")
+    else:
+        context.log.warning("Impossible de trier par DateDebut (valeurs manquantes ou colonne absente).")
     
     context.log.info(f"Nettoyage terminé: {len(df)} lignes après traitement.")
     
     return df
+
 
 # Pour l'export CSV
 @asset(deps=["nettoyer_donnees_xml"])
