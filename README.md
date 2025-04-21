@@ -44,12 +44,11 @@ Le projet suit une architecture ETL classique:
 1. Cloner le dépôt
    ```bash
    git clone https://github.com/luluscript/4DATA-PROJET.git
-   cd bison-fute-pipeline
 
 2. Lancer les conteneurs Docker
 
    ```bash
-    docker-compose up -d
+    task reset-no-cache
 
 3. Accéder à l'interface Dagster
 
@@ -64,31 +63,41 @@ Matérialisation manuelle des assets
 ### Visualisations
 Les visualisations sont générées dans le dossier data/visualisations et peuvent être consultées directement ou via le tableau de bord généré à l'adresse data/dashboard.html.
 
+### Architecture technique
+#### Extraction des données
+Source : API Bison Futé (tipi.bison-fute.gouv.fr)
+Données : Fichiers XML DATEX II contenant des informations sur le trafic routier
+#### Stockage
+MongoDB pour le stockage des données transformées
+#### Transformation
+Parsing XML avec lxml
+Nettoyage et standardisation des données avec pandas
+#### Monitoring
+Logs détaillés accessibles via l'interface Dagster
+Choix de conception
+Dagster : Choisi pour sa flexibilité et son approche data-centric avec le concept d'assets
+MongoDB : Base NoSQL adaptée aux données semi-structurées variables
+Docker : Garantit la portabilité et la reproductibilité de l'environnement
+
 ### La schedule (bison_fute_daily_schedule)
 La schedule est configurée pour exécuter automatiquement le job mon_job tous les jours à 6h00 du matin. En pratique, cela signifie que:
 
 Chaque jour à 6h00 du matin, Dagster démarrera automatiquement le pipeline de traitement
+
 Ce pipeline exécutera séquentiellement toutes les étapes définies dans le job:
-Récupération des fichiers XML
-Analyse (parsing) de ces fichiers
-Nettoyage des données extraites
-Export des données en CSV
-Chargement des données dans MongoDB
-Cette automatisation garantit que votre traitement s'exécute quotidiennement sans intervention manuelle.
+- Récupération des fichiers XML
+- Analyse (parsing) de ces fichiers
+- Nettoyage des données extraites
+- Export des données en CSV
+- Chargement des données dans MongoDB
+Cette automatisation garantit que le traitement s'exécute quotidiennement sans intervention manuelle.
 
 ### Le sensor (bison_fute_file_sensor)
-Le sensor## surveille en continu l'arrivée de nouveaux fichiers XML dans un répertoire spécifié. Son fonctionnement est le suivant:
+Le sensor surveille en continu l'arrivée de nouveaux fichiers XML dans un répertoire spécifié. Son fonctionnement est le suivant:
 
 Le sensor s'active périodiquement (typiquement toutes les 30 secondes par défaut)
 À chaque activation, il vérifie si de nouveaux fichiers XML sont apparus dans le répertoire surveillé
 S'il détecte de nouveaux fichiers, il:
-Enregistre ces fichiers comme "déjà traités" pour ne pas les retraiter à l'avenir
-Déclenche immédiatement une exécution du job pour traiter ces nouveaux fichiers
-Si aucun nouveau fichier n'est détecté, il ne fait rien et attendra la prochaine vérification
-
-### Choix techniques
-Pourquoi MongoDB?
-MongoDB a été choisi pour sa flexibilité avec les données semi-structurées. Les données d'événements routiers peuvent varier en structure et MongoDB permet de stocker ces variations sans modification du schéma.
-
-Pourquoi Dagster?
-Dagster offre une approche moderne basée sur les assets pour l'orchestration de pipelines de données, avec une excellente observabilité et une interface utilisateur intuitive.
+- Enregistre ces fichiers comme "déjà traités" pour ne pas les retraiter à l'avenir
+- Déclenche immédiatement une exécution du job pour traiter ces nouveaux fichiers
+- Si aucun nouveau fichier n'est détecté, il ne fait rien et attendra la prochaine vérification

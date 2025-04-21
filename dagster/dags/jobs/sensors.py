@@ -7,7 +7,6 @@ from datetime import datetime
 @sensor(job=mon_job)
 def bison_fute_file_sensor(context):
     """Détecte les nouveaux fichiers XML dans le répertoire de données."""
-    s
     # Récupérez l'état précédent du sensor (fichiers déjà traités)
     sensor_state = context.cursor or "[]"
     processed_files = set(eval(sensor_state))

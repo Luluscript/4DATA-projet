@@ -13,3 +13,7 @@ pymongo
 matplotlib
 seaborn
 pytest
+pytest-mock
+pytest-cov
+numpy
+pathlib
