@@ -2,6 +2,11 @@
 version: '3'
 
 tasks:
+  down:
+    desc: "Shit down les containers"
+    cmds:
+      - docker-compose down -v
+
   reset:
     desc: "Démarre les services en arrière-plan"
     cmds:
@@ -13,6 +18,12 @@ tasks:
     cmds:
       - docker-compose down -v
       - docker-compose up --build --force-recreate --no-deps -d
+
+  clean-images:
+    desc: "compose down and delete images"
+    cmds:
+      - task: down
+      - docker system prune -f
 
   clean-volumes:
     desc: "Clean up des volumes docker"

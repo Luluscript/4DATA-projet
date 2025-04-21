@@ -17,6 +17,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      docker_example_network:
+        ipv4_address: 172.28.1.2
 
   mongo-express:
     image: mongo-express
@@ -32,6 +35,9 @@ services:
     depends_on:
       - mongodb
     restart: unless-stopped
+    networks:
+      docker_example_network:
+        ipv4_address: 172.28.1.3
   # This service runs the postgres DB used by dagster for run storage, schedule storage,
   # and event log storage. Depending on the hardware you run this Compose on, you may be able
   # to reduce the interval and timeout in the healthcheck to speed up your `docker-compose up` times.
@@ -42,13 +48,14 @@ services:
       POSTGRES_USER: "postgres_user"
       POSTGRES_PASSWORD: "postgres_password"
       POSTGRES_DB: "postgres_db"
-    networks:
-      - docker_example_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres_user -d postgres_db"]
       interval: 10s
       timeout: 8s
       retries: 5
+    networks:
+      docker_example_network:
+        ipv4_address: 172.28.1.4
 
   # This service runs the gRPC server that loads your user code, in both dagster-webserver
   # and dagster-daemon. By setting DAGSTER_CURRENT_IMAGE to its own image, we tell the
@@ -69,7 +76,8 @@ services:
       DAGSTER_POSTGRES_DB: "postgres_db"
       DAGSTER_CURRENT_IMAGE: "docker_example_user_code_image"
     networks:
-      - docker_example_network
+      docker_example_network:
+        ipv4_address: 172.28.1.5
 
   # This service runs dagster-webserver, which loads your user code from the user code container.
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
@@ -99,7 +107,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - docker_example_network
+      docker_example_network:
+        ipv4_address: 172.28.1.6
     depends_on:
       docker_example_postgresql:
         condition: service_healthy
@@ -125,7 +134,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - docker_example_network
+      docker_example_network:
+        ipv4_address: 172.28.1.7
     depends_on:
       docker_example_postgresql:
         condition: service_healthy
@@ -136,7 +146,9 @@ networks:
   docker_example_network:
     driver: bridge
     name: docker_example_network
-
+    ipam:
+      config:
+        - subnet: "172.28.1.0/24"
 
 volumes:
   mongodb-data:

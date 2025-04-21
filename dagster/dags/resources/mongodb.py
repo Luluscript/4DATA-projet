@@ -7,6 +7,12 @@ class MongoDBResource:
         self.database_name = database_name
         self._client = None
     
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = MongoClient(self.connection_string)
+        return self._client
+    
     def get_database(self):
         if self._client is None:
             self._client = MongoClient(self.connection_string)
@@ -21,7 +27,7 @@ class MongoDBResource:
     config_schema={
         "connection_string": Field(StringSource, 
             description="MongoDB connection string",
-            default_value="mongodb://mongodb:27017/"),  # Utilisez le nom du service
+            default_value="mongodb://supmap:supmap@mongodb:27017/supmap?authSource=admin"),  # Mise à jour avec authentification
         "database_name": Field(StringSource, 
             description="MongoDB database name",
             default_value="supmap"),
