@@ -16,8 +16,6 @@ Ce projet implémente une pipeline ETL complète permettant d'extraire, transfor
 
 ## Architecture
 
-![Architecture](./docs/images/architecture.png)
-
 Le projet suit une architecture ETL classique:
 
 1. **Extraction** - Récupération des fichiers XML depuis l'API Bison Futé
@@ -43,7 +41,7 @@ Le projet suit une architecture ETL classique:
 ### Déploiement
 1. Cloner le dépôt
    ```bash
-   git clone https://github.com/luluscript/4DATA-PROJET.git
+   git clone https://github.com/luluscript/4DATA-projet.git
 
 2. Lancer les conteneurs Docker
 
@@ -74,7 +72,8 @@ Parsing XML avec lxml
 Nettoyage et standardisation des données avec pandas
 #### Monitoring
 Logs détaillés accessibles via l'interface Dagster
-Choix de conception
+
+#### Choix de conception
 Dagster : Choisi pour sa flexibilité et son approche data-centric avec le concept d'assets
 MongoDB : Base NoSQL adaptée aux données semi-structurées variables
 Docker : Garantit la portabilité et la reproductibilité de l'environnement

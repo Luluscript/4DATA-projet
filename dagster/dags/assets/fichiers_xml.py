@@ -422,6 +422,7 @@ def xml_data_csv(context, nettoyer_donnees_xml) -> str:
         context.log.error(f"Erreur lors de l'export CSV: {str(e)}")
         raise
 
+
 @asset(
     deps=["xml_data_csv"],
     required_resource_keys={"mongodb"}
